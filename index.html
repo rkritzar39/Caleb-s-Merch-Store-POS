@@ -3,98 +3,107 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Caleb's Merch Store — POS (Register)</title>
+  <title>Caleb's Merch Store — POS (Apple Style)</title>
 
   <!-- Styles -->
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- jsPDF for receipts -->
+  <!-- jsPDF for receipt generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 
-  <!-- App script -->
+  <!-- Main app -->
   <script defer src="app.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
-      <div class="logo">Caleb's Merch Store</div>
-      <div class="subtitle">Point of Sale • Register</div>
+    <div class="left">
+      <div class="brand">
+        <div class="logo">Caleb's Merch Store</div>
+        <div class="tag">Point of Sale — Register</div>
+      </div>
     </div>
 
-    <div class="top-right">
-      <div id="userBadge" class="user-badge">Not signed in</div>
-      <button id="authBtn" class="btn ghost">Sign In</button>
-      <button id="inventoryBtn" class="btn ghost">Inventory</button>
-      <button id="salesBtn" class="btn ghost">Sales</button>
-      <button id="modeBtn" class="btn ghost">Local Mode</button>
+    <div class="center">
+      <div class="search-wrap">
+        <input id="searchInput" placeholder="Search products or SKU…" aria-label="Search products"/>
+      </div>
+    </div>
+
+    <div class="right">
+      <div id="userInfo" class="user-info">Not signed in</div>
+      <button id="authBtn" class="icon-btn">Sign In</button>
+      <button id="inventoryBtn" class="icon-btn">Inventory</button>
+      <button id="salesBtn" class="icon-btn">Sales</button>
+      <button id="modeBtn" class="icon-btn">Local</button>
     </div>
   </header>
 
   <main class="register">
-    <!-- Left: categories + product grid -->
-    <section class="left-panel">
-      <div class="category-bar">
-        <!-- categories inserted by JS -->
-        <button class="cat active" data-cat="All Products">All Products</button>
-        <button class="cat" data-cat="Outdoor">Outdoor</button>
-        <button class="cat" data-cat="Hats">Hats</button>
-        <button class="cat" data-cat="Hoodies &amp; Sweatshirts">Hoodies &amp; Sweatshirts</button>
-        <button class="cat" data-cat="T-Shirts">T-Shirts</button>
-        <button class="cat" data-cat="Baby &amp; Toddler">Baby &amp; Toddler</button>
-        <button class="cat" data-cat="Kitchenwear">Kitchenwear</button>
-        <button class="cat" data-cat="Accessories">Accessories</button>
-        <input id="searchBox" class="search" placeholder="Search products or SKU..." />
+    <!-- LEFT: Category pills + Product Grid -->
+    <section class="left-col">
+      <div class="category-pills" role="tablist" aria-label="Categories">
+        <button class="pill active" data-cat="All Products">All Products</button>
+        <button class="pill" data-cat="Outdoor">Outdoor</button>
+        <button class="pill" data-cat="Hats">Hats</button>
+        <button class="pill" data-cat="Hoodies &amp; Sweatshirts">Hoodies &amp; Sweatshirts</button>
+        <button class="pill" data-cat="T-Shirts">T-Shirts</button>
+        <button class="pill" data-cat="Baby &amp; Toddler">Baby & Toddler</button>
+        <button class="pill" data-cat="Kitchenwear">Kitchenwear</button>
+        <button class="pill" data-cat="Accessories">Accessories</button>
       </div>
 
-      <div id="productGrid" class="product-grid">
-        <!-- product tiles injected by JS -->
+      <div id="productGrid" class="product-grid" aria-live="polite">
+        <!-- JS injects cards -->
       </div>
     </section>
 
-    <!-- Right: cart panel -->
-    <aside class="right-panel">
-      <div class="cart-header">
-        <h3>Current Sale</h3>
-        <div class="cart-meta">
-          <div id="cartItemsCount">0 items</div>
-          <div id="cartEmployee" class="muted">Employee: —</div>
+    <!-- RIGHT: Cart / Register -->
+    <aside class="right-col">
+      <div class="register-card">
+        <div class="register-header">
+          <div>
+            <h3>Current Sale</h3>
+            <div id="itemsCount" class="muted">0 items</div>
+          </div>
+          <div class="employee" id="employeeBadge">Employee: —</div>
         </div>
-      </div>
 
-      <div id="cartList" class="cart-list">
-        <!-- cart rows injected by JS -->
-      </div>
-
-      <div class="cart-totals">
-        <div class="line"><span>Subtotal</span><span id="subtotal">$0.00</span></div>
-        <div class="line"><span>Shipping</span><span id="shipping">$0.00</span></div>
-        <div class="line"><span>Tax (7%)</span><span id="tax">$0.00</span></div>
-        <div class="line total"><span>Total</span><span id="total">$0.00</span></div>
-      </div>
-
-      <div class="customer-block">
-        <h4>Customer</h4>
-        <input id="custName" placeholder="Full name" />
-        <input id="custEmail" placeholder="Email" />
-        <input id="custPhone" placeholder="Phone" />
-        <div class="row-inline">
-          <label><input type="radio" name="deliveryOption" value="pickup" checked /> Pickup</label>
-          <label><input type="radio" name="deliveryOption" value="delivery" /> Delivery</label>
+        <div id="cartList" class="cart-list" aria-live="polite">
+          <!-- cart rows -->
         </div>
-        <input id="custAddress" placeholder="Delivery address (if delivery)" />
-      </div>
 
-      <div class="cart-actions">
-        <button id="checkoutBtn" class="btn primary">Checkout</button>
-        <button id="clearBtn" class="btn">Clear</button>
-      </div>
+        <div class="totals">
+          <div class="row"><span>Subtotal</span><span id="subtotal">$0.00</span></div>
+          <div class="row"><span>Discounts</span><span id="discountTotal">$0.00</span></div>
+          <div class="row"><span>Shipping</span><span id="shipping">$0.00</span></div>
+          <div class="row"><span>Tax (7%)</span><span id="tax">$0.00</span></div>
+          <div class="row total"><strong>Total</strong><strong id="total">$0.00</strong></div>
+        </div>
 
-      <div class="small muted">Tip: Use keyboard F1 to search, F2 to open inventory.</div>
+        <div class="customer-section">
+          <h4>Customer</h4>
+          <input id="custName" placeholder="Full name" />
+          <input id="custEmail" placeholder="Email" />
+          <input id="custPhone" placeholder="Phone" />
+          <div class="delivery-row">
+            <label><input type="radio" name="deliveryMode" value="pickup" checked /> Pickup</label>
+            <label><input type="radio" name="deliveryMode" value="delivery" /> Delivery</label>
+          </div>
+          <input id="custAddress" placeholder="Delivery address (if delivery)" />
+        </div>
+
+        <div class="actions-row">
+          <button id="checkoutBtn" class="btn primary">Checkout</button>
+          <button id="clearBtn" class="btn">Clear</button>
+        </div>
+
+        <div class="muted small">Tip: F1 search • F2 inventory</div>
+      </div>
     </aside>
   </main>
 
-  <!-- Checkout modal -->
-  <div id="checkoutModal" class="modal hidden">
+  <!-- Checkout Modal -->
+  <div id="checkoutModal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-card">
       <h3>Complete Sale</h3>
 
@@ -106,72 +115,79 @@
         </select>
       </label>
 
-      <div id="mixedInputs" class="hidden">
-        <input id="cashAmt" placeholder="Cash amount" />
-        <input id="cardAmt" placeholder="Card amount" />
+      <div id="mixedRow" class="hidden">
+        <input id="mixedCash" placeholder="Cash amount" />
+        <input id="mixedCard" placeholder="Card amount" />
       </div>
 
       <label>Employee
         <select id="employeeSelect"></select>
       </label>
 
+      <div class="discount-control">
+        <label>Manual discount (amount or %)
+          <input id="manualDiscount" placeholder="e.g. 5 or 10%" />
+        </label>
+      </div>
+
       <div class="modal-actions">
-        <button id="confirmSale" class="btn primary">Confirm & Print Receipt</button>
-        <button id="cancelCheckout" class="btn">Cancel</button>
+        <button id="confirmSale" class="btn primary">Confirm & Print</button>
+        <button id="cancelSale" class="btn">Cancel</button>
       </div>
     </div>
   </div>
 
-  <!-- Inventory modal -->
-  <div id="inventoryModal" class="modal hidden">
+  <!-- Inventory Modal -->
+  <div id="inventoryModal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-card wide">
-      <h3>Inventory (Admin)</h3>
+      <h3>Inventory — Admin</h3>
       <div class="inv-actions">
-        <button id="newProdBtn" class="btn">New Product</button>
-        <button id="importSeed" class="btn">Import Sample</button>
-        <button id="exportInv" class="btn">Export CSV</button>
+        <button id="newProductBtn" class="btn">New Product</button>
+        <button id="importSampleBtn" class="btn">Import Sample</button>
+        <button id="exportInvBtn" class="btn">Export CSV</button>
+        <div id="saleEngineStatus" class="muted" style="margin-left:auto"></div>
       </div>
 
-      <div id="invList" class="inv-list"></div>
+      <div id="inventoryList" class="inv-list"></div>
 
       <div class="modal-actions">
-        <button id="closeInv" class="btn">Close</button>
+        <button id="closeInvBtn" class="btn">Close</button>
       </div>
     </div>
   </div>
 
-  <!-- Product editor modal -->
-  <div id="prodEditor" class="modal hidden">
+  <!-- Product Editor -->
+  <div id="productEditor" class="modal hidden">
     <div class="modal-card">
-      <h3 id="prodEditorTitle">New Product</h3>
+      <h3 id="productEditorTitle">Create Product</h3>
       <input id="pe_id" type="hidden" />
       <input id="pe_sku" placeholder="SKU" />
       <input id="pe_name" placeholder="Name" />
       <input id="pe_price" placeholder="Price (e.g. 19.99)" />
-      <input id="pe_stock" placeholder="Stock (integer)" />
-      <input id="pe_cat" placeholder="Category" />
+      <input id="pe_stock" placeholder="Stock" />
+      <input id="pe_category" placeholder="Category" />
       <input id="pe_img" placeholder="Image URL (optional)" />
       <textarea id="pe_desc" placeholder="Description"></textarea>
 
       <div class="modal-actions">
-        <button id="saveProd" class="btn primary">Save</button>
-        <button id="cancelProd" class="btn">Cancel</button>
+        <button id="saveProductBtn" class="btn primary">Save</button>
+        <button id="cancelProductBtn" class="btn">Cancel</button>
       </div>
     </div>
   </div>
 
-  <!-- Sales modal -->
+  <!-- Sales Modal -->
   <div id="salesModal" class="modal hidden">
     <div class="modal-card wide">
       <h3>Sales History</h3>
       <div id="salesList" class="inv-list"></div>
       <div class="modal-actions">
-        <button id="closeSales" class="btn">Close</button>
+        <button id="closeSalesBtn" class="btn">Close</button>
       </div>
     </div>
   </div>
 
-  <!-- Auth modal -->
+  <!-- Auth Modal -->
   <div id="authModal" class="modal hidden">
     <div class="modal-card">
       <h3>Sign In</h3>
@@ -186,8 +202,8 @@
   </div>
 
   <footer class="footer">
-    <div>Caleb's Merch Store • Local Register • White Clean Theme</div>
-    <div id="ver" class="muted">v1.0</div>
+    <div>Caleb's Merch Store — Apple Style POS</div>
+    <div class="muted">v1.0</div>
   </footer>
 </body>
 </html>
