@@ -1,109 +1,189 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Caleb's Merch Store — POS</title>
-    <link rel="stylesheet" href="styles.css" />
-    <script defer src="app.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Caleb's Merch Store — POS (Hybrid)</title>
+
+  <!-- styles -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- jsPDF for receipts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+
+  <!-- QR optional lib (not used by default) -->
+  <script defer src="app.js"></script>
 </head>
-
 <body>
-
-    <!-- ===== Top Bar ===== -->
-    <header class="top-bar glass">
-        <div class="logo">🛍️ Caleb’s Merch Store — POS</div>
-
-        <div class="top-actions">
-            <button id="searchBtn" class="icon-btn">🔍</button>
-            <button id="settingsBtn" class="icon-btn">⚙️</button>
-            <button id="logoutBtn" class="danger-btn">Logout</button>
-        </div>
-    </header>
-
-    <main class="layout">
-
-        <!-- ===== Sidebar Categories ===== -->
-        <aside class="sidebar glass">
-            <h2>Categories</h2>
-            <ul id="categoryList">
-                <li class="active">All Products</li>
-                <li>Outdoor</li>
-                <li>Hats</li>
-                <li>Hoodies & Sweatshirts</li>
-                <li>T-Shirts</li>
-                <li>Baby & Toddler</li>
-                <li>Kitchenwear</li>
-                <li>Accessories</li>
-            </ul>
-        </aside>
-
-        <!-- ===== Product Area ===== -->
-        <section class="product-area">
-            <div class="product-grid" id="productGrid">
-                <!-- products loaded by app.js -->
-            </div>
-        </section>
-
-        <!-- ===== Cart Panel ===== -->
-        <aside class="cart-panel glass">
-            <h2>Cart</h2>
-
-            <div id="cartItems" class="cart-items">
-                <!-- cart items added by JS -->
-            </div>
-
-            <div class="cart-summary">
-                <div class="row">
-                    <span>Subtotal:</span>
-                    <span id="cartSubtotal">$0.00</span>
-                </div>
-                <div class="row">
-                    <span>Tax (7%):</span>
-                    <span id="cartTax">$0.00</span>
-                </div>
-                <div class="row total">
-                    <span>Total:</span>
-                    <span id="cartTotal">$0.00</span>
-                </div>
-
-                <button id="checkoutBtn" class="checkout-btn">Checkout</button>
-            </div>
-        </aside>
-
-    </main>
-
-    <!-- ===== Checkout Modal ===== -->
-    <div id="checkoutModal" class="modal hidden">
-        <div class="modal-content glass">
-            <h2>Checkout</h2>
-
-            <div class="payment-options">
-                <button class="payment-btn">💵 Cash</button>
-                <button class="payment-btn">💳 Card</button>
-                <button class="payment-btn">📱 Apple Pay</button>
-            </div>
-
-            <button class="close-modal">Close</button>
-        </div>
+  <header class="top-bar glass">
+    <div class="logo">🛍️ Caleb’s Merch Store — POS</div>
+    <div class="top-actions">
+      <span id="userBadge" class="badge">Not signed in</span>
+      <button id="authBtn" class="icon-btn">Sign In</button>
+      <button id="inventoryBtn" class="icon-btn">Inventory</button>
+      <button id="salesBtn" class="icon-btn">Sales</button>
+      <button id="syncToggle" class="icon-btn">Local Mode</button>
     </div>
+  </header>
 
-    <!-- ===== Settings Drawer ===== -->
-    <div id="settingsDrawer" class="drawer hidden glass">
-        <h2>Settings</h2>
+  <main class="layout">
+    <!-- Sidebar (categories) -->
+    <aside class="sidebar glass">
+      <h2>Categories</h2>
+      <ul id="categoryList">
+        <li class="active">All Products</li>
+        <li>Outdoor</li>
+        <li>Hats</li>
+        <li>Hoodies &amp; Sweatshirts</li>
+        <li>T-Shirts</li>
+        <li>Baby &amp; Toddler</li>
+        <li>Kitchenwear</li>
+        <li>Accessories</li>
+      </ul>
 
-        <div class="setting">
-            <label>Dark Mode</label>
-            <input type="checkbox" id="darkModeToggle" />
+      <div class="sidebar-foot">
+        <button id="importSeedBtn" class="small-btn">Import Sample Products</button>
+        <button id="exportCsvBtn" class="small-btn">Export Inventory CSV</button>
+      </div>
+    </aside>
+
+    <!-- Product area -->
+    <section class="product-area">
+      <div class="product-controls">
+        <input id="searchInput" placeholder="Search products or SKU..." />
+        <label class="switch"><input id="lowStockFilter" type="checkbox" /> <span>Low stock</span></label>
+      </div>
+
+      <div id="productGrid" class="product-grid"></div>
+    </section>
+
+    <!-- Cart Panel -->
+    <aside class="cart-panel glass">
+      <h2>Cart</h2>
+
+      <div id="cartItems" class="cart-items"></div>
+
+      <div class="cart-summary">
+        <div class="row"><span>Subtotal</span><span id="cartSubtotal">$0.00</span></div>
+        <div class="row"><span>Shipping</span><span id="cartShipping">$0.00</span></div>
+        <div class="row"><span>Tax (7%)</span><span id="cartTax">$0.00</span></div>
+        <div class="row total"><span>Total</span><span id="cartTotal">$0.00</span></div>
+
+        <div class="customer-block">
+          <h4>Customer</h4>
+          <input id="custName" placeholder="Full name" />
+          <input id="custEmail" placeholder="Email" />
+          <input id="custPhone" placeholder="Phone" />
+          <label><input type="radio" name="delivery" value="pickup" checked /> Pickup</label>
+          <label><input type="radio" name="delivery" value="delivery" /> Delivery</label>
+          <input id="custAddress" placeholder="Delivery address (if delivery)" />
         </div>
 
-        <div class="setting">
-            <label>Sound Effects</label>
-            <input type="checkbox" checked />
+        <div class="action-row">
+          <button id="checkoutBtn" class="checkout-btn">Checkout</button>
+          <button id="clearCartBtn" class="small-btn">Clear</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Checkout Modal (payment & confirm) -->
+  <div id="checkoutModal" class="modal hidden">
+    <div class="modal-content glass">
+      <h3>Complete Sale</h3>
+
+      <div id="paymentSection">
+        <label>Payment type:
+          <select id="paymentType">
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+            <option value="mixed">Mixed</option>
+          </select>
+        </label>
+
+        <div id="mixedInputs" class="hidden">
+          <input id="payCashAmount" placeholder="Cash amount" />
+          <input id="payCardAmount" placeholder="Card amount" />
         </div>
 
-        <button class="close-settings">Close</button>
+        <label>Employee:
+          <select id="employeeSelect"></select>
+        </label>
+
+        <div class="modal-actions">
+          <button id="confirmSaleBtn" class="checkout-btn">Confirm & Print Receipt</button>
+          <button id="cancelSaleBtn" class="small-btn">Cancel</button>
+        </div>
+      </div>
     </div>
+  </div>
 
+  <!-- Inventory Modal -->
+  <div id="inventoryModal" class="modal hidden">
+    <div class="modal-content glass wide">
+      <h3>Inventory — Admin</h3>
+      <div class="inventory-actions">
+        <button id="newProductBtn" class="small-btn">New Product</button>
+        <button id="importCsvBtn" class="small-btn">Import CSV</button>
+        <button id="exportProductsCsvBtn" class="small-btn">Export CSV</button>
+        <span id="inventoryNotice" class="muted"></span>
+      </div>
+
+      <div id="inventoryList" class="inventory-list"></div>
+
+      <div class="modal-actions">
+        <button id="closeInventoryBtn" class="small-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sales Modal (view, void, refund) -->
+  <div id="salesModal" class="modal hidden">
+    <div class="modal-content glass wide">
+      <h3>Sales History</h3>
+      <div id="salesList" class="sales-list"></div>
+      <div class="modal-actions">
+        <button id="closeSalesBtn" class="small-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div id="authModal" class="modal hidden">
+    <div class="modal-content glass">
+      <h3>Sign In</h3>
+      <input id="authEmail" placeholder="email" />
+      <input id="authPassword" type="password" placeholder="password" />
+      <div class="modal-actions">
+        <button id="authSubmitBtn" class="checkout-btn">Sign In</button>
+        <button id="authCancelBtn" class="small-btn">Cancel</button>
+      </div>
+      <small class="muted">Demo users: <br> admin@example.com / admin123 (admin)<br> staff@example.com / staff123 (staff)</small>
+    </div>
+  </div>
+
+  <!-- Product Editor Modal -->
+  <div id="productEditorModal" class="modal hidden">
+    <div class="modal-content glass">
+      <h3 id="prodEditorTitle">New Product</h3>
+      <input id="prodId" type="hidden" />
+      <input id="prodSku" placeholder="SKU" />
+      <input id="prodName" placeholder="Product name" />
+      <input id="prodPrice" placeholder="Price (e.g. 19.99)" />
+      <input id="prodStock" placeholder="Stock (integer)" />
+      <input id="prodCategory" placeholder="Category" />
+      <input id="prodImg" placeholder="Image URL (optional)" />
+      <textarea id="prodDesc" placeholder="Description"></textarea>
+      <div class="modal-actions">
+        <button id="saveProductBtn" class="checkout-btn">Save</button>
+        <button id="cancelProductBtn" class="small-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="bottom-bar glass">
+    <div>Caleb's Merch Store POS • Local demo mode (hybrid ready)</div>
+    <div id="version">v1.0</div>
+  </footer>
 </body>
 </html>
