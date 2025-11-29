@@ -1,0 +1,51 @@
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    background: #f5f5f7;
+    color: #111;
+}
+
+.admin-header {
+    padding: 20px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.back-btn {
+    text-decoration: none;
+    font-size: 14px;
+    color: #0071e3;
+}
+
+.admin-main { display:flex; gap:20px; padding:20px; flex-wrap:wrap; align-items:flex-start; }
+
+.admin-section {
+    background: #fff;
+    margin: 0;
+    padding: 20px;
+    border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    width: 540px;
+}
+
+.admin-section h2 { margin-top:0; }
+
+.sale-form label { display:block; margin-bottom:12px; font-size:14px; }
+.sale-form input, .sale-form select {
+    width:100%; padding:10px; margin-top:6px; border:1px solid #e6e6ea; border-radius:10px; background:#fafafa;
+}
+
+.save-sale-btn {
+    background:#0071e3; color:#fff; padding:10px 14px; border:none; border-radius:10px; cursor:pointer;
+}
+
+.save-sale-btn:hover { background:#005bbd; }
+
+.sales-list { margin-top:12px; max-height:60vh; overflow:auto; display:flex; flex-direction:column; gap:10px; }
+.sale-item { padding:12px; border-radius:10px; background:#fafafa; border:1px solid #e6e6ea; }
+.sale-item h3 { margin:0 0 6px 0; }
+.sale-meta { color:#444; font-size:13px; margin-bottom:6px; }
+.delete-sale { color:#d32f2f; cursor:pointer; font-size:13px; text-decoration:underline; }
