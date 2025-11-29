@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Admin Settings — Caleb's Merch Store POS</title>
+    <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+    <header class="admin-header">
+        <h1>Admin Settings</h1>
+        <a href="index.html" class="back-btn">← Back to POS</a>
+    </header>
+
+    <main class="admin-main">
+      <section class="admin-section">
+        <h2>Schedule a Sale</h2>
+
+        <form id="saleForm" class="sale-form">
+            <label>
+                Sale Name
+                <input type="text" id="saleName" placeholder="Black Friday 50% Off" required>
+            </label>
+
+            <label>
+                Discount Type
+                <select id="discountType">
+                    <option value="percent">Percent (%) Off</option>
+                    <option value="amount">Flat Amount ($ Off)</option>
+                    <option value="free_shipping">Free Shipping</option>
+                </select>
+            </label>
+
+            <label id="valueLabel">
+                Discount Value
+                <input type="number" id="discountValue" step="0.01" placeholder="50 (for 50%)">
+            </label>
+
+            <label>
+                Category (optional)
+                <select id="saleCategory">
+                    <option value="">All Categories</option>
+                    <option>Outdoor</option>
+                    <option>Hats</option>
+                    <option>Hoodies &amp; Sweatshirts</option>
+                    <option>T-Shirts</option>
+                    <option>Baby &amp; Toddler</option>
+                    <option>Kitchenwear</option>
+                    <option>Accessories</option>
+                </select>
+            </label>
+
+            <label>
+                Start Date & Time
+                <input type="datetime-local" id="saleStart" required>
+            </label>
+
+            <label>
+                End Date & Time
+                <input type="datetime-local" id="saleEnd" required>
+            </label>
+
+            <div style="display:flex;gap:8px">
+              <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="saleActive" checked /> Active</label>
+              <button type="submit" class="save-sale-btn">Save Sale</button>
+            </div>
+        </form>
+      </section>
+
+      <section class="admin-section">
+        <h2>Scheduled Sales</h2>
+        <div id="scheduledSales" class="sales-list"></div>
+      </section>
+    </main>
+
+    <script src="admin.js"></script>
+</body>
+</html>
