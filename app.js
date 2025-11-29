@@ -1,345 +1,220 @@
-/* Caleb's Merch Store — app.js
-   Hybrid POS:
-   - localStorage data model (products, users, sales)
-   - admin/staff demo auth
-   - inventory CRUD (admin)
-   - create sale, void, refund
-   - shipping rules (flat + free-over)
-   - collect customer info
-   - generate PDF receipt via jsPDF
-   - optional Firebase hooks (commented)
+/* app.js — Local-only White POS Register
+   Features:
+   - LocalStorage (products, users, sales, session)
+   - Demo auth (admin/staff)
+   - Inventory CRUD (admin)
+   - Cart, checkout, customer info, shipping, tax
+   - Sales saved locally, void, refund, print PDF (jsPDF)
 */
 
-/* ======= Configuration ======= */
+/* CONFIG */
 const TAX_RATE = 0.07; // 7%
-const SHIPPING_RULES = { flatRate: 6.50, freeOver: 100.00 }; // dollars
+const SHIPPING = { flat: 6.50, freeOver: 100.00 };
 
-/* ======= Storage keys ======= */
-const KEY_PRODUCTS = 'calebs_products_v1';
-const KEY_USERS = 'calebs_users_v1';
-const KEY_SALES = 'calebs_sales_v1';
-const KEY_SESSION = 'calebs_session_v1';
+/* KEYS */
+const K_PRODUCTS = 'caleb_products_v1';
+const K_USERS = 'caleb_users_v1';
+const K_SALES = 'caleb_sales_v1';
+const K_SESSION = 'caleb_session_v1';
 
-/* ======= Demo seed data (if inventory empty) ======= */
-const SAMPLE_PRODUCTS = [
-  { id: idNow(), sku: 'OUT-001', name: 'Outdoor Backpack', price: 49.99, category: 'Outdoor', stock: 12, img: '', desc: '' },
-  { id: idNow(), sku: 'HAT-001', name: 'Caleb Hat', price: 19.99, category: 'Hats', stock: 30, img: '', desc: '' },
-  { id: idNow(), sku: 'HD-001', name: 'Logo Hoodie', price: 39.99, category: 'Hoodies & Sweatshirts', stock: 18, img: '', desc: '' },
-  { id: idNow(), sku: 'TEE-001', name: 'Graphic Tee', price: 24.99, category: 'T-Shirts', stock: 40, img: '', desc: '' },
-  { id: idNow(), sku: 'BABY-001', name: 'Baby Onesie', price: 14.99, category: 'Baby & Toddler', stock: 20, img: '', desc: '' },
-  { id: idNow(), sku: 'MUG-001', name: 'Caleb Mug', price: 12.99, category: 'Kitchenwear', stock: 25, img: '', desc: '' },
-  { id: idNow(), sku: 'STK-001', name: 'Sticker Pack', price: 4.99, category: 'Accessories', stock: 250, img: '', desc: '' }
+/* SAMPLE PRODUCTS */
+const SAMPLE = [
+  { id: idNow(), sku:'OUT-001', name:'Outdoor Backpack', price:49.99, category:'Outdoor', stock:12, img:'' },
+  { id: idNow(), sku:'HAT-001', name:'Caleb Hat', price:19.99, category:'Hats', stock:30, img:'' },
+  { id: idNow(), sku:'HD-001', name:'Logo Hoodie', price:39.99, category:'Hoodies & Sweatshirts', stock:18, img:'' },
+  { id: idNow(), sku:'TEE-001', name:'Graphic Tee', price:24.99, category:'T-Shirts', stock:40, img:'' },
+  { id: idNow(), sku:'BABY-001', name:'Baby Onesie', price:14.99, category:'Baby & Toddler', stock:20, img:'' },
+  { id: idNow(), sku:'MUG-001', name:'Caleb Mug', price:12.99, category:'Kitchenwear', stock:25, img:'' },
+  { id: idNow(), sku:'STK-001', name:'Sticker Pack', price:4.99, category:'Accessories', stock:250, img:'' }
 ];
 
-/* ======= DOM refs ======= */
-const productGrid = document.getElementById('productGrid');
-const categoryList = document.getElementById('categoryList');
-const searchInput = document.getElementById('searchInput');
-const lowStockFilter = document.getElementById('lowStockFilter');
+/* STATE */
+let PRODUCTS = load(K_PRODUCTS) || SAMPLE.slice();
+let USERS = load(K_USERS) || seedUsers();
+let SALES = load(K_SALES) || [];
+let SESSION = load(K_SESSION) || null;
+let CART = [];
 
-const cartItemsEl = document.getElementById('cartItems');
-const subtotalEl = document.getElementById('cartSubtotal');
-const shippingEl = document.getElementById('cartShipping');
-const taxEl = document.getElementById('cartTax');
-const totalEl = document.getElementById('cartTotal');
+/* DOM */
+const productGrid = document.getElementById('productGrid');
+const searchBox = document.getElementById('searchBox');
+const catBtns = document.querySelectorAll('.cat');
+
+const cartList = document.getElementById('cartList');
+const subtotalEl = document.getElementById('subtotal');
+const shippingEl = document.getElementById('shipping');
+const taxEl = document.getElementById('tax');
+const totalEl = document.getElementById('total');
+const cartItemsCount = document.getElementById('cartItemsCount');
+const cartEmployee = document.getElementById('cartEmployee');
+
+const checkoutBtn = document.getElementById('checkoutBtn');
+const clearBtn = document.getElementById('clearBtn');
 
 const checkoutModal = document.getElementById('checkoutModal');
-const checkoutBtn = document.getElementById('checkoutBtn');
+const paymentType = document.getElementById('paymentType');
+const mixedInputs = document.getElementById('mixedInputs');
+const cashAmt = document.getElementById('cashAmt');
+const cardAmt = document.getElementById('cardAmt');
+const employeeSelect = document.getElementById('employeeSelect');
+const confirmSale = document.getElementById('confirmSale');
+const cancelCheckout = document.getElementById('cancelCheckout');
 
 const inventoryBtn = document.getElementById('inventoryBtn');
 const inventoryModal = document.getElementById('inventoryModal');
-const inventoryList = document.getElementById('inventoryList');
-const newProductBtn = document.getElementById('newProductBtn');
-const importSeedBtn = document.getElementById('importSeedBtn');
-const exportCsvBtn = document.getElementById('exportCsvBtn');
-const exportProductsCsvBtn = document.getElementById('exportProductsCsvBtn');
+const invList = document.getElementById('invList');
+const newProdBtn = document.getElementById('newProdBtn');
+const importSeed = document.getElementById('importSeed');
+const exportInv = document.getElementById('exportInv');
+const closeInv = document.getElementById('closeInv');
 
-const authBtn = document.getElementById('authBtn');
-const authModal = document.getElementById('authModal');
+const prodEditor = document.getElementById('prodEditor');
+const prodEditorTitle = document.getElementById('prodEditorTitle');
+const pe_id = document.getElementById('pe_id');
+const pe_sku = document.getElementById('pe_sku');
+const pe_name = document.getElementById('pe_name');
+const pe_price = document.getElementById('pe_price');
+const pe_stock = document.getElementById('pe_stock');
+const pe_cat = document.getElementById('pe_cat');
+const pe_img = document.getElementById('pe_img');
+const pe_desc = document.getElementById('pe_desc');
+const saveProd = document.getElementById('saveProd');
+const cancelProd = document.getElementById('cancelProd');
 
 const salesBtn = document.getElementById('salesBtn');
 const salesModal = document.getElementById('salesModal');
 const salesList = document.getElementById('salesList');
+const closeSales = document.getElementById('closeSales');
 
+const authBtn = document.getElementById('authBtn');
+const authModal = document.getElementById('authModal');
+const authEmail = document.getElementById('authEmail');
+const authPass = document.getElementById('authPass');
+const authSubmit = document.getElementById('authSubmit');
+const authCancel = document.getElementById('authCancel');
 const userBadge = document.getElementById('userBadge');
-const syncToggle = document.getElementById('syncToggle');
+const modeBtn = document.getElementById('modeBtn');
 
-const productEditorModal = document.getElementById('productEditorModal');
-
-/* form refs inside product editor */
-const prodId = document.getElementById('prodId');
-const prodSku = document.getElementById('prodSku');
-const prodName = document.getElementById('prodName');
-const prodPrice = document.getElementById('prodPrice');
-const prodStock = document.getElementById('prodStock');
-const prodCategory = document.getElementById('prodCategory');
-const prodImg = document.getElementById('prodImg');
-const prodDesc = document.getElementById('prodDesc');
-const saveProductBtn = document.getElementById('saveProductBtn');
-const cancelProductBtn = document.getElementById('cancelProductBtn');
-
-/* checkout form refs */
-const paymentType = document.getElementById('paymentType');
-const mixedInputs = document.getElementById('mixedInputs');
-const payCashAmount = document.getElementById('payCashAmount');
-const payCardAmount = document.getElementById('payCardAmount');
-const employeeSelect = document.getElementById('employeeSelect');
-const confirmSaleBtn = document.getElementById('confirmSaleBtn');
-const cancelSaleBtn = document.getElementById('cancelSaleBtn');
-
-/* customer fields */
 const custName = document.getElementById('custName');
 const custEmail = document.getElementById('custEmail');
 const custPhone = document.getElementById('custPhone');
 const custAddress = document.getElementById('custAddress');
 
-/* sales controls */
-const closeSalesBtn = document.getElementById('closeSalesBtn');
-
-/* other controls */
-const clearCartBtn = document.getElementById('clearCartBtn');
-
-/* ======= App state ======= */
-let PRODUCTS = load(KEY_PRODUCTS) || SAMPLE_PRODUCTS.slice();
-let USERS = load(KEY_USERS) || seedUsers();
-let SALES = load(KEY_SALES) || [];
-let SESSION = load(KEY_SESSION) || null;
-let CART = [];
-
-/* Optional: hybrid sync flag (local by default) */
-let HYBRID_SYNC = false;
-
-/* ======= Init ======= */
-renderAuthBadge();
-renderCategoryClicks();
+/* INIT */
 renderProducts('All Products');
-
 bindUI();
 renderCart();
+renderAuthBadge();
 renderEmployees();
 
-/* ======= Functions ======= */
-
-function idNow(){ return 'id_' + Math.random().toString(36).slice(2,9) + '_' + Date.now().toString(36) }
-
-function load(key){
-  try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null } catch(e){ console.warn('load fail',e); return null }
-}
-function save(key,val){ localStorage.setItem(key, JSON.stringify(val)) }
-
-/* seed demo users (admin + staff) */
+/* HELPERS */
+function idNow(){ return 'p_' + Math.random().toString(36).slice(2,9) + '_' + Date.now().toString(36) }
+function load(k){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : null } catch(e){ return null } }
+function save(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+function round(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
+function fmt(n){ return round(n).toFixed(2); }
 function seedUsers(){
   const u = [
-    { id:idNow(), email:'admin@example.com', name:'Admin', role:'admin', password:'admin123' },
-    { id:idNow(), email:'staff@example.com', name:'Staff', role:'staff', password:'staff123' }
+    { id:idNow(), name:'Admin', email:'admin@example.com', role:'admin', password:'admin123' },
+    { id:idNow(), name:'Staff', email:'staff@example.com', role:'staff', password:'staff123' }
   ];
-  save(KEY_USERS,u);
+  save(K_USERS, u);
   return u;
 }
 
-/* ========= UI BINDINGS ========== */
+/* UI BINDINGS */
 function bindUI(){
-  // search
-  searchInput?.addEventListener('input', ()=> renderProducts(getActiveCategory()));
-
-  // low stock
-  lowStockFilter?.addEventListener('change', ()=> renderProducts(getActiveCategory()));
-
-  // product clicks handled in renderProducts
-
-  // category click handled separately
-  document.querySelectorAll('#categoryList li').forEach(li=>{
-    li.addEventListener('click', ()=> {
-      document.querySelector('#categoryList li.active')?.classList.remove('active');
-      li.classList.add('active');
-      renderProducts(li.innerText);
+  // categories
+  catBtns.forEach(b=>{
+    b.addEventListener('click', ()=> {
+      document.querySelector('.cat.active')?.classList.remove('active');
+      b.classList.add('active');
+      renderProducts(b.dataset.cat);
     });
   });
 
+  // search
+  searchBox.addEventListener('input', ()=> renderProducts(getActiveCat()));
+
+  // product click handled in renderProducts
+
+  // cart actions
   checkoutBtn.addEventListener('click', ()=> {
-    if(CART.length===0){ alert('Cart is empty'); return; }
-    if(!SESSION){ alert('Please sign in to complete a sale'); openAuthModal(); return; }
-    openCheckoutModal();
+    if(CART.length === 0){ alert('Cart empty'); return; }
+    if(!SESSION) { alert('Please sign in'); openAuth(); return; }
+    openCheckout();
   });
+  clearBtn.addEventListener('click', ()=> { CART=[]; renderCart(); });
 
-  clearCartBtn.addEventListener('click', ()=> { CART = []; renderCart(); });
-
-  // checkout modal behavior
-  paymentType?.addEventListener('change', ()=> {
-    mixedInputs.classList.toggle('hidden', paymentType.value !== 'mixed');
-  });
-  confirmSaleBtn?.addEventListener('click', confirmSale);
-  cancelSaleBtn?.addEventListener('click', ()=> checkoutModal.classList.add('hidden'));
+  // checkout modal
+  paymentType.addEventListener('change', ()=> mixedInputs.classList.toggle('hidden', paymentType.value !== 'mixed'));
+  confirmSale.addEventListener('click', finalizeSale);
+  cancelCheckout.addEventListener('click', ()=> checkoutModal.classList.add('hidden'));
 
   // inventory
-  inventoryBtn?.addEventListener('click', ()=> {
-    if(!SESSION || !isAdmin()) { alert('Inventory requires admin'); openAuthModal(); return; }
-    openInventoryModal();
+  inventoryBtn.addEventListener('click', ()=> {
+    if(!SESSION || SESSION.role !== 'admin'){ alert('Inventory requires admin sign in'); openAuth(); return; }
+    openInventory();
   });
-  newProductBtn?.addEventListener('click', ()=> openProductEditor());
-  importSeedBtn?.addEventListener('click', ()=> { PRODUCTS = PRODUCTS.concat(SAMPLE_PRODUCTS); save(KEY_PRODUCTS,PRODUCTS); renderProducts(getActiveCategory()); alert('Sample products added'); });
-  exportCsvBtn?.addEventListener('click', ()=> downloadCsv(PRODUCTS,'inventory_export.csv'));
-  exportProductsCsvBtn?.addEventListener('click', ()=> downloadCsv(PRODUCTS,'products.csv'));
-  closeInventoryBtn?.addEventListener('click', ()=> inventoryModal.classList.add('hidden'));
+  newProdBtn.addEventListener('click', ()=> openProductEditor());
+  importSeed.addEventListener('click', ()=> { PRODUCTS = SAMPLE.concat(PRODUCTS); save(K_PRODUCTS, PRODUCTS); renderProducts(getActiveCat()); alert('Sample imported'); });
+  exportInv.addEventListener('click', ()=> downloadCSV(PRODUCTS,'inventory.csv'));
+  closeInv.addEventListener('click', ()=> inventoryModal.classList.add('hidden'));
+  saveProd.addEventListener('click', saveProductEditor);
+  cancelProd.addEventListener('click', ()=> prodEditor.classList.add('hidden'));
+
+  // sales
+  salesBtn.addEventListener('click', ()=> salesModal.classList.remove('hidden'));
+  closeSales.addEventListener('click', ()=> salesModal.classList.add('hidden'));
 
   // auth
-  authBtn?.addEventListener('click', ()=> { if(SESSION) signOut(); else openAuthModal(); });
-  document.getElementById('authSubmitBtn')?.addEventListener('click', doAuth);
-  document.getElementById('authCancelBtn')?.addEventListener('click', ()=> authModal.classList.add('hidden'));
+  authBtn.addEventListener('click', ()=> { if(SESSION) { signOut(); } else openAuth(); });
+  authSubmit.addEventListener('click', doAuth);
+  authCancel.addEventListener('click', ()=> authModal.classList.add('hidden'));
 
-  // product editor
-  saveProductBtn?.addEventListener('click', saveProduct);
-  cancelProductBtn?.addEventListener('click', ()=> productEditorModal.classList.add('hidden'));
+  // sales list binding
+  salesModal.addEventListener('click', ()=> renderSales());
 
-  // sales modal
-  salesBtn?.addEventListener('click', ()=> { openSalesModal(); });
-  closeSalesBtn?.addEventListener('click', ()=> salesModal.classList.add('hidden'));
-
-  // sync toggle
-  syncToggle?.addEventListener('click', ()=> {
-    HYBRID_SYNC = !HYBRID_SYNC;
-    syncToggle.innerText = HYBRID_SYNC ? 'Hybrid Sync ON' : 'Local Mode';
-    // If turning on hybrid we would init firebase here (see comment)
-    if(HYBRID_SYNC) alert('Hybrid mode: enable Firebase in app.js to sync across devices (not configured by default).');
+  // keyboard
+  window.addEventListener('keydown', (e)=> {
+    if(e.key === 'F1') searchBox.focus();
+    if(e.key === 'F2') inventoryBtn.click();
   });
 
-  // employees select will be updated on renderEmployees
-
-  // initialize keyboard shortcuts (optional)
-  window.addEventListener('keydown', (e)=>{
-    if(e.key === 'F2') openInventoryModal();
-    if(e.key === 'F1') document.getElementById('searchInput').focus();
+  // mode (placeholder)
+  modeBtn.addEventListener('click', ()=> {
+    alert('Local Mode active — hybrid sync can be added later.');
   });
 }
 
-/* ======= AUTH ======= */
-function openAuthModal(){ authModal.classList.remove('hidden'); }
-function signOut(){ SESSION = null; save(KEY_SESSION,null); renderAuthBadge(); alert('Signed out'); }
-function doAuth(){
-  const email = document.getElementById('authEmail').value.trim();
-  const pass = document.getElementById('authPassword').value;
-  const user = USERS.find(u=>u.email === email && u.password === pass);
-  if(!user){ alert('Invalid demo credentials'); return; }
-  SESSION = { id: user.id, email: user.email, name:user.name, role:user.role };
-  save(KEY_SESSION,SESSION);
-  authModal.classList.add('hidden');
-  renderAuthBadge();
-  renderEmployees();
-  alert(`Signed in as ${user.role}`);
-}
-function renderAuthBadge(){
-  if(SESSION) userBadge.innerText = `${SESSION.name} (${SESSION.role})`;
-  else userBadge.innerText = 'Not signed in';
-}
-function isAdmin(){ return SESSION && SESSION.role === 'admin' }
-
-/* ======= PRODUCTS UI & INVENTORY CRUD ======= */
-function renderProducts(filter = 'All Products'){
-  const q = (searchInput?.value || '').trim().toLowerCase();
-  const lowOnly = lowStockFilter?.checked === true;
-
-  const list = PRODUCTS.filter(p => {
-    if(filter !== 'All Products' && p.category !== filter) return false;
+/* PRODUCTS */
+function renderProducts(category){
+  const q = (searchBox.value || '').trim().toLowerCase();
+  productGrid.innerHTML = '';
+  const list = PRODUCTS.filter(p=>{
+    if(category && category !== 'All Products' && p.category !== category) return false;
     if(q && !(p.name.toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q))) return false;
-    if(lowOnly && p.stock > 10) return false;
     return true;
   });
-
-  productGrid.innerHTML = '';
-  list.forEach(p => {
+  list.forEach(p=>{
     const el = document.createElement('div'); el.className = 'product';
     el.innerHTML = `
-      <img src="${p.img || 'https://via.placeholder.com/320x200?text=Product'}" alt="">
-      <div class="name">${escapeHtml(p.name)}</div>
-      <div class="price">$${formatDollars(p.price)}</div>
-      <div class="meta">${p.sku || ''} • stock: ${p.stock}</div>
+      <div style="width:100%;height:100px;background:#f3f4f6;border-radius:8px;display:flex;align-items:center;justify-content:center">
+        <img src="${p.img || ''}" style="max-width:100%;max-height:100%;display:${p.img?'block':'none'}" alt="">
+        ${p.img ? '' : '<div style="color:#9ca3af">No Image</div>'}
+      </div>
+      <div class="name">${escape(p.name)}</div>
+      <div class="price">$${fmt(p.price)}</div>
+      <div class="meta">${p.sku || ''} • stock ${p.stock}</div>
     `;
     el.addEventListener('click', ()=> addToCart(p.id));
     productGrid.appendChild(el);
   });
 }
 
-function openInventoryModal(){
-  inventoryModal.classList.remove('hidden');
-  renderInventoryList();
-}
-
-function renderInventoryList(){
-  inventoryList.innerHTML = '';
-  PRODUCTS.forEach(p=>{
-    const row = document.createElement('div'); row.className='inventory-row';
-    row.innerHTML = `
-      <div style="display:flex;gap:12px;align-items:center">
-        <img src="${p.img || 'https://via.placeholder.com/80'}" style="width:80px;height:60px;object-fit:cover;border-radius:6px" />
-        <div>
-          <div style="font-weight:700">${escapeHtml(p.name)}</div>
-          <div class="muted">${p.sku || ''} • ${p.category}</div>
-          <div class="muted">Price: $${formatDollars(p.price)} • Stock: ${p.stock}</div>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="small-btn edit-btn" data-id="${p.id}">Edit</button>
-        <button class="small-btn delete-btn" data-id="${p.id}">Delete</button>
-      </div>
-    `;
-    inventoryList.appendChild(row);
-  });
-
-  // bind edit/delete
-  inventoryList.querySelectorAll('.edit-btn').forEach(b=>{
-    b.addEventListener('click', e=>{
-      const id = e.target.getAttribute('data-id');
-      const p = PRODUCTS.find(x=>x.id===id);
-      openProductEditor(p);
-    });
-  });
-  inventoryList.querySelectorAll('.delete-btn').forEach(b=>{
-    b.addEventListener('click', e=>{
-      const id = e.target.getAttribute('data-id');
-      if(!confirm('Delete product?')) return;
-      PRODUCTS = PRODUCTS.filter(x=>x.id!==id);
-      save(KEY_PRODUCTS,PRODUCTS);
-      renderInventoryList(); renderProducts(getActiveCategory());
-    });
-  });
-}
-
-function openProductEditor(product){
-  productEditorModal.classList.remove('hidden');
-  if(!product){
-    prodId.value=''; prodSku.value=''; prodName.value=''; prodPrice.value=''; prodStock.value=''; prodCategory.value=''; prodImg.value=''; prodDesc.value='';
-    document.getElementById('prodEditorTitle').innerText = 'New Product';
-  } else {
-    prodId.value=product.id; prodSku.value=product.sku; prodName.value=product.name; prodPrice.value=product.price; prodStock.value=product.stock; prodCategory.value=product.category; prodImg.value=product.img; prodDesc.value=product.desc;
-    document.getElementById('prodEditorTitle').innerText = 'Edit Product';
-  }
-}
-
-function saveProduct(){
-  if(!isAdmin()){ alert('Only admin can save products'); return; }
-  const id = prodId.value || idNow();
-  const sku = prodSku.value.trim();
-  const name = prodName.value.trim(); if(!name){ alert('Name required'); return; }
-  const price = Number(prodPrice.value); if(Number.isNaN(price)){ alert('Invalid price'); return; }
-  const stock = parseInt(prodStock.value||'0',10);
-  const category = prodCategory.value.trim() || 'Accessories';
-  const img = prodImg.value.trim();
-  const desc = prodDesc.value.trim();
-
-  const existingIndex = PRODUCTS.findIndex(p=>p.id===id);
-  const obj = { id, sku, name, price, stock, category, img, desc };
-  if(existingIndex >= 0) PRODUCTS[existingIndex] = obj;
-  else PRODUCTS.unshift(obj);
-
-  save(KEY_PRODUCTS, PRODUCTS);
-  productEditorModal.classList.add('hidden');
-  renderInventoryList();
-  renderProducts(getActiveCategory());
-}
-
-/* ======= CART / SALES ======= */
-function addToCart(productId){
-  const p = PRODUCTS.find(x=>x.id===productId);
+/* CART */
+function addToCart(id){
+  const p = PRODUCTS.find(x=>x.id===id);
   if(!p) return;
   const inCart = CART.find(i=>i.id===p.id);
   if(inCart){ inCart.qty += 1; }
@@ -348,268 +223,399 @@ function addToCart(productId){
 }
 
 function renderCart(){
-  cartItemsEl.innerHTML = '';
+  cartList.innerHTML = '';
   let subtotal = 0;
   CART.forEach(item=>{
-    subtotal += (item.price * item.qty);
-    const row = document.createElement('div');
-    row.className = 'cart-item';
+    subtotal += item.price * item.qty;
+    const row = document.createElement('div'); row.className = 'cart-item';
     row.innerHTML = `
-      <div style="display:flex;gap:10px;align-items:center">
-        <div><strong>${escapeHtml(item.name)}</strong><br><small class="muted">x${item.qty}</small></div>
+      <div>
+        <div style="font-weight:600">${escape(item.name)}</div>
+        <div class="muted">x${item.qty} • $${fmt(item.price)}</div>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end">
-        <div>$${formatDollars(item.price * item.qty)}</div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button class="small-btn dec" data-id="${item.id}">−</button>
-          <button class="small-btn inc" data-id="${item.id}">+</button>
-          <button class="small-btn rm" data-id="${item.id}">Remove</button>
-        </div>
+      <div class="controls">
+        <button class="btn small dec" data-id="${item.id}">−</button>
+        <button class="btn small inc" data-id="${item.id}">+</button>
+        <button class="btn small rm" data-id="${item.id}">Remove</button>
+        <div style="margin-top:6px;font-weight:700">$${fmt(item.price * item.qty)}</div>
       </div>
     `;
-    cartItemsEl.appendChild(row);
+    cartList.appendChild(row);
   });
 
-  // bind cart item buttons
-  cartItemsEl.querySelectorAll('.inc').forEach(b=> b.addEventListener('click', e=> {
-    const id = e.target.getAttribute('data-id'); CART.find(i=>i.id===id).qty++; renderCart();
-  }));
-  cartItemsEl.querySelectorAll('.dec').forEach(b=> b.addEventListener('click', e=> {
-    const id = e.target.getAttribute('data-id'); const it = CART.find(i=>i.id===id); if(!it) return;
-    it.qty = Math.max(1, it.qty-1); renderCart();
-  }));
-  cartItemsEl.querySelectorAll('.rm').forEach(b=> b.addEventListener('click', e=> {
-    const id = e.target.getAttribute('data-id'); CART = CART.filter(i=>i.id!==id); renderCart();
-  }));
+  // bind controls
+  cartList.querySelectorAll('.inc').forEach(b=> b.addEventListener('click', e=> { const id = e.target.dataset.id; CART.find(i=>i.id===id).qty++; renderCart(); }));
+  cartList.querySelectorAll('.dec').forEach(b=> b.addEventListener('click', e=> { const id = e.target.dataset.id; const it = CART.find(i=>i.id===id); if(it){ it.qty = Math.max(1, it.qty-1); renderCart(); }}));
+  cartList.querySelectorAll('.rm').forEach(b=> b.addEventListener('click', e=> { const id = e.target.dataset.id; CART = CART.filter(i=>i.id!==id); renderCart(); }));
 
-  // shipping calculation (if delivery selected)
-  const deliverySelected = document.querySelector('input[name="delivery"]:checked')?.value === 'delivery';
+  // shipping: check delivery radio
+  const delivery = document.querySelector('input[name="deliveryOption"]:checked')?.value === 'delivery';
   let shipping = 0;
-  if(deliverySelected){
-    const subtotalRounded = roundTwo(subtotal);
-    if(subtotalRounded >= SHIPPING_RULES.freeOver) shipping = 0;
-    else shipping = SHIPPING_RULES.flatRate;
+  const subtotalRounded = round(subtotal);
+  if(delivery){
+    shipping = subtotalRounded >= SHIPPING.freeOver ? 0 : SHIPPING.flat;
   }
+  const tax = round((subtotal + shipping) * TAX_RATE);
+  const total = round(subtotal + shipping + tax);
 
-  const tax = roundTwo((subtotal + shipping) * TAX_RATE);
-  const total = roundTwo(subtotal + shipping + tax);
+  subtotalEl.innerText = `$${fmt(subtotal)}`;
+  shippingEl.innerText = `$${fmt(shipping)}`;
+  taxEl.innerText = `$${fmt(tax)}`;
+  totalEl.innerText = `$${fmt(total)}`;
 
-  subtotalEl.innerText = `$${formatDollars(subtotal)}`;
-  shippingEl.innerText = `$${formatDollars(shipping)}`;
-  taxEl.innerText = `$${formatDollars(tax)}`;
-  totalEl.innerText = `$${formatDollars(total)}`;
+  cartItemsCount.innerText = `${CART.reduce((s,i)=>s+i.qty,0)} items`;
+  cartEmployee.innerText = `Employee: ${SESSION ? SESSION.name + ' ('+SESSION.role+')' : '—'}`;
+
+  // persist current UI state if needed
 }
 
-/* ======= Confirm Sale ======= */
-function openCheckoutModal(){ 
-  // fill employee select
+/* CHECKOUT */
+function openCheckout(){
   renderEmployees();
   checkoutModal.classList.remove('hidden');
 }
 
-function confirmSale(){
-  // validation
-  const name = custName.value.trim(); const email = custEmail.value.trim(); const phone = custPhone.value.trim();
-  const deliveryMode = document.querySelector('input[name="delivery"]:checked')?.value;
-  if(!name){ if(!confirm('Customer name empty. Continue?')===true) return; }
-  // payment validation simplified for demo
-  let tender = { type: paymentType.value };
-  if(paymentType.value === 'mixed'){
-    const cash = Number(payCashAmount.value) || 0; const card = Number(payCardAmount.value) || 0;
-    tender = { type:'mixed', cash: cash, card: card };
-  }
+function finalizeSale(){
+  // validate employee
+  const empId = employeeSelect.value;
+  const employee = USERS.find(u=>u.id===empId) || { name:'Unknown' };
+  // customer
+  const customer = { name: custName.value.trim(), email: custEmail.value.trim(), phone: custPhone.value.trim(), address: custAddress.value.trim() };
+  // payment
+  let payment = { type: paymentType.value };
+  if(payment.type === 'mixed'){ payment.cash = Number(cashAmt.value) || 0; payment.card = Number(cardAmt.value) || 0; }
+  // compute totals
+  let subtotal = 0; CART.forEach(i=> subtotal += i.price * i.qty);
+  const shipping = document.querySelector('input[name="deliveryOption"]:checked')?.value === 'delivery' ? (subtotal >= SHIPPING.freeOver ? 0 : SHIPPING.flat) : 0;
+  const tax = round((subtotal + shipping) * TAX_RATE);
+  const total = round(subtotal + shipping + tax);
 
-  // compute totals again
-  let subtotal = 0; CART.forEach(i => subtotal += i.price * i.qty);
-  const shipping = (deliveryMode === 'delivery' && subtotal < SHIPPING_RULES.freeOver) ? SHIPPING_RULES.flatRate : 0;
-  const tax = roundTwo((subtotal + shipping) * TAX_RATE);
-  const total = roundTwo(subtotal + shipping + tax);
-
-  // create sale record
+  // sale record
   const sale = {
     id: idNow(),
     createdAt: new Date().toISOString(),
     status: 'paid',
-    items: JSON.parse(JSON.stringify(CART)), // deep copy
-    subtotal: roundTwo(subtotal),
-    shipping: roundTwo(shipping),
+    items: JSON.parse(JSON.stringify(CART)),
+    subtotal: round(subtotal),
+    shipping: round(shipping),
     tax: tax,
     total: total,
-    customer: { name, email, phone, address: custAddress.value || '', deliveryMode },
-    employee: SESSION ? { id: SESSION.id, name: SESSION.name, role: SESSION.role } : { id: null, name: 'guest', role: 'guest' },
-    payment: tender,
+    payment,
+    customer,
+    employee: { id: employee.id || null, name: employee.name || 'Unknown', role: employee.role || 'staff' },
     void: null,
     refund: null
   };
 
   // decrement inventory
-  try{
-    sale.items.forEach(it=>{
-      const prod = PRODUCTS.find(p => p.id === it.id);
-      if(prod){ prod.stock = Math.max(0, (prod.stock - it.qty)); }
-    });
-    save(KEY_PRODUCTS, PRODUCTS);
-  } catch(e){ console.error(e); }
+  sale.items.forEach(it=>{
+    const p = PRODUCTS.find(x=>x.id===it.id);
+    if(p) p.stock = Math.max(0, p.stock - it.qty);
+  });
 
-  SALES.unshift(sale); save(KEY_SALES, SALES);
+  SALES.unshift(sale);
+  save(K_SALES, SALES);
+  save(K_PRODUCTS, PRODUCTS);
 
-  // optional: push to remote (Firebase) if HYBRID_SYNC true (stub)
-  if(HYBRID_SYNC){ /* TODO: upload sale to remote DB */ }
+  // print receipt
+  generatePDF(sale);
 
-  // print receipt (PDF) then clear cart
-  generateReceiptPDF(sale);
+  // clear cart & UI
   CART = []; renderCart();
   checkoutModal.classList.add('hidden');
-  renderProducts(getActiveCategory());
-  alert('Sale recorded');
+  alert('Sale complete and saved locally.');
 }
 
-/* ======= Sales history / void / refund ======= */
-function openSalesModal(){
-  salesModal.classList.remove('hidden'); renderSalesList();
-}
-
-function renderSalesList(){
+/* SALES HISTORY + VOID + REFUND */
+function renderSales(){
   salesList.innerHTML = '';
   if(SALES.length === 0){ salesList.innerHTML = '<div class="muted">No sales yet</div>'; return; }
   SALES.forEach(s=>{
     const row = document.createElement('div'); row.className = 'inventory-row';
     row.innerHTML = `
-      <div style="flex:1">
-        <div style="font-weight:700">${s.id} • $${formatDollars(s.total)}</div>
-        <div class="muted">${new Date(s.createdAt).toLocaleString()} • ${s.employee?.name || ''} • status: ${s.status}</div>
-        <div class="muted">Customer: ${escapeHtml(s.customer?.name || '-') } ${ s.customer?.address ? ' • ' + escapeHtml(s.customer.address) : ''}</div>
+      <div>
+        <div style="font-weight:700">${s.id} • $${fmt(s.total)}</div>
+        <div class="muted">${new Date(s.createdAt).toLocaleString()} • ${s.employee?.name || '-'}</div>
+        <div class="muted">Customer: ${escape(s.customer?.name || '-')}${ s.customer?.address ? ' • ' + escape(s.customer.address) : '' }</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        ${ s.status === 'paid' ? `<button class="small-btn void-btn" data-id="${s.id}">Void</button>` : ''}
-        ${ s.status === 'paid' ? `<button class="small-btn refund-btn" data-id="${s.id}">Refund</button>` : ''}
-        <button class="small-btn print-btn" data-id="${s.id}">Print</button>
+        ${ s.status === 'paid' ? `<button class="btn" data-void="${s.id}">Void</button>` : '' }
+        ${ s.status === 'paid' ? `<button class="btn" data-ref="${s.id}">Refund</button>` : '' }
+        <button class="btn" data-print="${s.id}">Print</button>
       </div>
     `;
     salesList.appendChild(row);
   });
 
-  // bind actions
-  salesList.querySelectorAll('.void-btn').forEach(b=>b.addEventListener('click', e=>{
-    const id = e.target.getAttribute('data-id'); doVoidSale(id);
+  // bind
+  salesList.querySelectorAll('[data-void]').forEach(b=> b.addEventListener('click', e=> {
+    const id = e.target.dataset.void;
+    doVoid(id);
   }));
-  salesList.querySelectorAll('.refund-btn').forEach(b=>b.addEventListener('click', e=>{
-    const id = e.target.getAttribute('data-id'); doRefundSale(id);
+  salesList.querySelectorAll('[data-ref]').forEach(b=> b.addEventListener('click', e=> {
+    const id = e.target.dataset.ref;
+    doRefund(id);
   }));
-  salesList.querySelectorAll('.print-btn').forEach(b=>b.addEventListener('click', e=>{
-    const id = e.target.getAttribute('data-id'); const s = SALES.find(x=>x.id===id); if(s) generateReceiptPDF(s);
+  salesList.querySelectorAll('[data-print]').forEach(b=> b.addEventListener('click', e=> {
+    const id = e.target.dataset.print; const s = SALES.find(x=>x.id===id); if(s) generatePDF(s);
   }));
 }
 
-function doVoidSale(id){
-  if(!confirm('Void this sale? This marks it void and will not restock by default. Admin only.')) return;
-  if(!SESSION || !isAdmin()){ alert('Only admin can void'); return; }
+/* VOID */
+function doVoid(id){
+  if(!SESSION || SESSION.role !== 'admin'){ alert('Only admin can void'); return; }
+  if(!confirm('Void this sale? This marks the sale as voided (no restock).')) return;
   const sale = SALES.find(s=>s.id===id);
   if(!sale) return;
   sale.status = 'voided';
-  sale.void = { by: SESSION.name, at: new Date().toISOString(), reason: 'Voided by admin' };
-  save(KEY_SALES, SALES);
-  renderSalesList();
+  sale.void = { by: SESSION.name, at: new Date().toISOString() };
+  save(K_SALES, SALES);
+  renderSales();
   alert('Sale voided');
 }
 
-function doRefundSale(id){
+/* REFUND */
+function doRefund(id){
+  if(!SESSION){ alert('Sign in to refund'); return; }
   const sale = SALES.find(s=>s.id===id);
   if(!sale) return;
-  const amountStr = prompt('Refund amount (e.g. 19.99) — full refund by default', sale.total);
-  if(amountStr === null) return;
-  const amt = Number(amountStr);
-  if(isNaN(amt) || amt <= 0){ alert('Invalid amount'); return; }
-  const reason = prompt('Reason for refund (optional)', 'Customer return');
-  // restock items proportional to refunded amount - for simplicity we'll restock full quantities on full refund
-  if(confirm('Restock items? (Yes will add items back to inventory)')){
+  const amtStr = prompt('Refund amount (e.g. 14.99). Full refund by default:', sale.total);
+  if(amtStr === null) return;
+  const amt = Number(amtStr);
+  if(Number.isNaN(amt) || amt <= 0){ alert('Invalid amount'); return; }
+  const reason = prompt('Reason for refund (optional):', 'Customer return');
+
+  // restock decision
+  if(confirm('Restock items? (Yes to add sold quantities back)')){
     sale.items.forEach(it=>{
-      const prod = PRODUCTS.find(p=>p.id===it.id);
-      if(prod) prod.stock = (prod.stock + it.qty);
+      const p = PRODUCTS.find(x=>x.id===it.id); if(p) p.stock = p.stock + it.qty;
     });
-    save(KEY_PRODUCTS, PRODUCTS);
+    save(K_PRODUCTS, PRODUCTS);
   }
-  sale.refund = { by: SESSION ? SESSION.name : 'unknown', at: new Date().toISOString(), amount: roundTwo(amt), reason };
+
+  sale.refund = { by: SESSION.name, at: new Date().toISOString(), amount: amt, reason };
   sale.status = 'refunded';
-  save(KEY_SALES, SALES);
-  renderSalesList(); renderProducts(getActiveCategory());
+  save(K_SALES, SALES);
+  renderSales();
+  renderProducts(getActiveCat());
   alert('Refund recorded');
 }
 
-/* ======= Receipt (PDF) ======= */
-function generateReceiptPDF(sale){
+/* PDF RECEIPT using jsPDF */
+function generatePDF(sale){
   try{
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({unit:'pt', format:'letter'});
     let y = 40;
-    doc.setFontSize(18); doc.text("Caleb's Merch Store", 40, y); y += 24;
-    doc.setFontSize(12); doc.text(`Sale: ${sale.id}`, 40, y); y += 16;
-    doc.text(`Date: ${new Date(sale.createdAt).toLocaleString()}`, 40, y); y += 18;
-    doc.text(`Employee: ${sale.employee?.name || ''}`, 40, y); y += 18;
-    doc.text(`Customer: ${sale.customer?.name || ''}`, 40, y); y += 18;
-    if(sale.customer?.address) { doc.text(`Address: ${sale.customer.address}`, 40, y); y += 18; }
-    y += 6; doc.line(36, y, 560, y); y+=12;
+    doc.setFontSize(18); doc.text("Caleb's Merch Store", 40, y); y+=24;
+    doc.setFontSize(11); doc.text(`Sale ID: ${sale.id}`, 40, y); y+=14;
+    doc.text(`Date: ${new Date(sale.createdAt).toLocaleString()}`, 40, y); y+=14;
+    doc.text(`Employee: ${sale.employee?.name || '-'}`, 40, y); y+=14;
+    doc.text(`Customer: ${sale.customer?.name || '-'}`, 40, y); y+=14;
+    if(sale.customer?.address) { doc.text(`Address: ${sale.customer.address}`, 40, y); y+=14; }
+    y+=6; doc.line(36,y,560,y); y+=12;
     sale.items.forEach(it=>{
-      const left = `${it.qty} x ${it.name}`;
-      const right = `$${formatDollars(it.price * it.qty)}`;
-      doc.text(left, 40, y);
-      doc.text(right, 480, y);
-      y += 16;
+      doc.text(`${it.qty} x ${it.name}`, 40, y);
+      doc.text(`$${fmt(it.price * it.qty)}`, 480, y);
+      y+=14;
     });
-    y += 6; doc.line(36, y, 560, y); y+=16;
-    doc.text(`Subtotal: $${formatDollars(sale.subtotal)}`, 40, y); y += 16;
-    doc.text(`Shipping: $${formatDollars(sale.shipping)}`, 40, y); y += 16;
-    doc.text(`Tax: $${formatDollars(sale.tax)}`, 40, y); y+=16;
-    doc.setFontSize(14); doc.text(`Total: $${formatDollars(sale.total)}`, 40, y); y+=24;
-    doc.setFontSize(10); doc.text('Thank you for shopping at Caleb\'s Merch Store!', 40, y);
+    y+=6; doc.line(36,y,560,y); y+=12;
+    doc.text(`Subtotal: $${fmt(sale.subtotal)}`, 40, y); y+=14;
+    doc.text(`Shipping: $${fmt(sale.shipping)}`, 40, y); y+=14;
+    doc.text(`Tax: $${fmt(sale.tax)}`, 40, y); y+=14;
+    doc.setFontSize(13); doc.text(`Total: $${fmt(sale.total)}`, 40, y); y+=20;
+    doc.setFontSize(10); doc.text('Thank you for your purchase!', 40, y);
     doc.save(`receipt_${sale.id}.pdf`);
-  }catch(e){ console.error('pdf fail',e); alert('Receipt generation failed') }
+  }catch(e){ console.error('pdf',e); alert('Receipt failed'); }
 }
 
-/* ======= Utility Helpers ======= */
-function formatDollars(n){ return (Math.round((n + Number.EPSILON) * 100)/100).toFixed(2) }
-function roundTwo(n){ return Math.round((n + Number.EPSILON) * 100)/100 }
-function escapeHtml(s){ if(!s) return ''; return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;' })[c]); }
-function getActiveCategory(){ return document.querySelector('#categoryList li.active')?.innerText || 'All Products' }
+/* INVENTORY UI */
+function openInventory(){ inventoryModal.classList.remove('hidden'); renderInventoryList(); }
+function renderInventoryList(){
+  invList.innerHTML = '';
+  PRODUCTS.forEach(p=>{
+    const row = document.createElement('div'); row.className = 'inventory-row';
+    row.innerHTML = `
+      <div>
+        <div style="font-weight:700">${escape(p.name)}</div>
+        <div class="muted">${p.sku || ''} • ${p.category}</div>
+        <div class="muted">Price $${fmt(p.price)} • Stock ${p.stock}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" data-edit="${p.id}">Edit</button>
+        <button class="btn" data-del="${p.id}">Delete</button>
+      </div>
+    `;
+    invList.appendChild(row);
+  });
 
-/* ======= CSV helpers ======= */
-function downloadCsv(arr, filename='export.csv'){
+  invList.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', e=> {
+    const id = e.target.dataset.edit; const p = PRODUCTS.find(x=>x.id===id); openProductEditor(p);
+  }));
+  invList.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', e=> {
+    const id = e.target.dataset.del;
+    if(!confirm('Delete product?')) return;
+    PRODUCTS = PRODUCTS.filter(x=>x.id!==id); save(K_PRODUCTS, PRODUCTS); renderInventoryList(); renderProducts(getActiveCat());
+  }));
+}
+
+function openProductEditor(p){
+  prodEditor.classList.remove('hidden');
+  if(!p){ prodEditorTitle.innerText='New Product'; pe_id.value=''; pe_sku.value=''; pe_name.value=''; pe_price.value=''; pe_stock.value=''; pe_cat.value=''; pe_img.value=''; pe_desc.value=''; }
+  else {
+    prodEditorTitle.innerText='Edit Product';
+    pe_id.value=p.id; pe_sku.value=p.sku || ''; pe_name.value=p.name; pe_price.value=p.price; pe_stock.value=p.stock; pe_cat.value=p.category; pe_img.value=p.img || ''; pe_desc.value=p.desc || '';
+  }
+}
+
+function saveProductEditor(){
+  if(!SESSION || SESSION.role !== 'admin'){ alert('Admin only'); return; }
+  const id = pe_id.value || idNow();
+  const sku = pe_sku.value.trim();
+  const name = pe_name.value.trim(); if(!name){ alert('Name required'); return; }
+  const price = Number(pe_price.value); if(Number.isNaN(price)){ alert('Invalid price'); return; }
+  const stock = parseInt(pe_stock.value||'0',10);
+  const cat = pe_cat.value.trim() || 'Accessories';
+  const img = pe_img.value.trim();
+  const desc = pe_desc.value.trim();
+  const existing = PRODUCTS.findIndex(x=>x.id===id);
+  const obj = { id, sku, name, price, stock, category:cat, img, desc };
+  if(existing >= 0) PRODUCTS[existing] = obj; else PRODUCTS.unshift(obj);
+  save(K_PRODUCTS, PRODUCTS);
+  prodEditor.classList.add('hidden'); renderInventoryList(); renderProducts(getActiveCat());
+}
+
+/* AUTH */
+function openAuth(){ authModal.classList.remove('hidden'); }
+function doAuth(){
+  const email = authEmail.value.trim(), pass = authPass.value;
+  const user = USERS.find(u=>u.email === email && u.password === pass);
+  if(!user){ alert('Invalid credentials'); return; }
+  SESSION = { id:user.id, name:user.name, role:user.role, email:user.email };
+  save(K_SESSION, SESSION);
+  authModal.classList.add('hidden');
+  renderAuthBadge(); renderEmployees();
+}
+function signOut(){ SESSION = null; save(K_SESSION,null); renderAuthBadge(); alert('Signed out'); }
+function renderAuthBadge(){ userBadge.innerText = SESSION ? `${SESSION.name} (${SESSION.role})` : 'Not signed in'; authBtn.innerText = SESSION ? 'Sign Out' : 'Sign In'; }
+
+/* EMPLOYEES */
+function renderEmployees(){
+  if(!employeeSelect) return;
+  employeeSelect.innerHTML = '';
+  USERS.forEach(u=> { const o = document.createElement('option'); o.value = u.id; o.textContent = `${u.name} (${u.role})`; employeeSelect.appendChild(o); });
+}
+
+/* UTIL */
+function getActiveCat(){ return document.querySelector('.cat.active')?.dataset.cat || 'All Products' }
+function escape(s){ if(!s) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function downloadCSV(arr, filename='export.csv'){
   if(!arr || !arr.length){ alert('Nothing to export'); return; }
   const keys = Object.keys(arr[0]);
   const csv = [keys.join(',')].concat(arr.map(o=> keys.map(k=> JSON.stringify(o[k]===undefined?'':o[k])).join(','))).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  const blob = new Blob([csv], {type:'text/csv'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
-/* ======= Employees select ======= */
-function renderEmployees(){
-  employeeSelect.innerHTML = '';
-  USERS.forEach(u=>{
-    const opt = document.createElement('option'); opt.value = u.id; opt.innerText = `${u.name} (${u.role})`;
-    employeeSelect.appendChild(opt);
+/* SALES render */
+function renderSalesListUI(){
+  salesList.innerHTML = '';
+  if(SALES.length === 0){ salesList.innerHTML = '<div class="muted">No sales yet</div>'; return; }
+  SALES.forEach(s=>{
+    const row = document.createElement('div'); row.className='inventory-row';
+    row.innerHTML = `<div>
+        <div style="font-weight:700">${s.id} • $${fmt(s.total)}</div>
+        <div class="muted">${new Date(s.createdAt).toLocaleString()} • ${s.employee?.name || '-'}</div>
+        <div class="muted">Customer: ${escape(s.customer?.name || '-')}${s.customer?.address ? ' • ' + escape(s.customer.address) : ''}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        ${ s.status === 'paid' ? `<button class="btn" data-void="${s.id}">Void</button>` : '' }
+        ${ s.status === 'paid' ? `<button class="btn" data-ref="${s.id}">Refund</button>` : '' }
+        <button class="btn" data-print="${s.id}">Print</button>
+      </div>`;
+    salesList.appendChild(row);
   });
+
+  salesList.querySelectorAll('[data-void]').forEach(b=> b.addEventListener('click', e=> {
+    const id = e.target.dataset.void; doVoid(id);
+  }));
+  salesList.querySelectorAll('[data-ref]').forEach(b=> b.addEventListener('click', e=> {
+    const id = e.target.dataset.ref; doRefund(id);
+  }));
+  salesList.querySelectorAll('[data-print]').forEach(b=> b.addEventListener('click', e=> {
+    const id = e.target.dataset.print; const s = SALES.find(x=>x.id===id); if(s) generatePDF(s);
+  }));
 }
 
-/* ======= Save on change ======= */
-window.addEventListener('beforeunload', ()=> {
-  save(KEY_PRODUCTS, PRODUCTS);
-  save(KEY_SALES, SALES);
-  save(KEY_USERS, USERS);
-  save(KEY_SESSION, SESSION);
+/* wrapper to keep renderSales up to date */
+function renderSales(){ renderSalesListUI(); }
+
+/* on modal open show list */
+salesModal.addEventListener('show', renderSales);
+
+/* finalize initial binding extras */
+function getActiveCatBtnText(){ return getActiveCat(); }
+
+/* start-up saves */
+save(K_PRODUCTS, PRODUCTS);
+save(K_USERS, USERS);
+save(K_SALES, SALES);
+
+/* Simple helper to ensure modals can be closed via Escape and clicks outside */
+document.addEventListener('keydown', e=> { if(e.key === 'Escape'){ document.querySelectorAll('.modal').forEach(m=> m.classList.add('hidden')); }});
+document.querySelectorAll('.modal').forEach(mod => {
+  mod.addEventListener('click', e=> { if(e.target === mod) mod.classList.add('hidden'); });
 });
 
-/* ======= initial render calls ======= */
-function renderEmployees(){ if(typeof window !== 'undefined'){ const s = employeeSelect; if(s){ s.innerHTML=''; USERS.forEach(u=>{ const o=document.createElement('option'); o.value=u.id; o.textContent=`${u.name} (${u.role})`; s.appendChild(o); }); } } }
-function renderCategoryClicks(){ /* already bound in bindUI at top-level for dynamic pages */ }
+/* expose for debug */
+window.__POS = { PRODUCTS, USERS, SALES, CART, SESSION };
 
-/* expose some debug helpers on window for convenience */
-window.__POS = {
-  PRODUCTS, SALES, USERS,
-  addToCart, renderProducts, openInventoryModal, openSalesModal
-};
+/* ensure sales modal content updates when shown */
+inventoryModal.addEventListener('show', renderInventoryList);
 
-/* initial saves to ensure storage keys exist */
-save(KEY_PRODUCTS, PRODUCTS);
-save(KEY_USERS, USERS);
-save(KEY_SALES, SALES);
+/* initial render for sales list when user opens modal */
+salesBtn.addEventListener('click', ()=> { renderSales(); salesModal.classList.remove('hidden'); });
+
+/* if user clicks inventory button and admin, open modal */
+inventoryBtn.addEventListener('click', ()=> {
+  if(!SESSION || SESSION.role !== 'admin'){ alert('Admin only'); openAuth(); return; }
+  openInventory();
+});
+
+/* small helpers to keep code compact */
+function openAuth(){ authModal.classList.remove('hidden'); }
+function openInventory(){ inventoryModal.classList.remove('hidden'); renderInventoryList(); }
+function openProductEditor(p){ prodEditor.classList.remove('hidden'); if(!p){ prodEditorTitle.innerText='New Product'; pe_id.value=''; pe_sku.value=''; pe_name.value=''; pe_price.value=''; pe_stock.value=''; pe_cat.value=''; pe_img.value=''; pe_desc.value=''; } else { prodEditorTitle.innerText='Edit Product'; pe_id.value=p.id; pe_sku.value=p.sku || ''; pe_name.value=p.name; pe_price.value=p.price; pe_stock.value=p.stock; pe_cat.value=p.category; pe_img.value=p.img || ''; pe_desc.value=p.desc || ''; } }
+function renderInventoryList(){ renderInventoryListUI(); }
+function renderInventoryListUI(){ invList.innerHTML = ''; PRODUCTS.forEach(p=>{ const row = document.createElement('div'); row.className='inventory-row'; row.innerHTML = `<div><div style="font-weight:700">${escape(p.name)}</div><div class="muted">${p.sku || ''} • ${p.category}</div><div class="muted">Price $${fmt(p.price)} • Stock ${p.stock}</div></div><div style="display:flex;gap:8px"><button class="btn" data-edit="${p.id}">Edit</button><button class="btn" data-del="${p.id}">Delete</button></div>`; invList.appendChild(row); }); invList.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', e=> { const id=e.target.dataset.edit; const p = PRODUCTS.find(x=>x.id===id); openProductEditor(p); })); invList.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', e=> { const id=e.target.dataset.del; if(!confirm('Delete product?')) return; PRODUCTS = PRODUCTS.filter(x=>x.id!==id); save(K_PRODUCTS, PRODUCTS); renderInventoryListUI(); renderProducts(getActiveCat()); })); }
+
+/* save product editor */
+function saveProductEditor(){ if(!SESSION || SESSION.role!=='admin'){ alert('Admin only'); return; } const id = pe_id.value || idNow(); const sku = pe_sku.value.trim(); const name = pe_name.value.trim(); if(!name){ alert('Name required'); return; } const price = Number(pe_price.value); if(Number.isNaN(price)){ alert('Invalid price'); return; } const stock = parseInt(pe_stock.value||'0',10); const cat = pe_cat.value.trim() || 'Accessories'; const img = pe_img.value.trim(); const desc = pe_desc.value.trim(); const existing = PRODUCTS.findIndex(x=>x.id===id); const obj = { id, sku, name, price, stock, category:cat, img, desc }; if(existing >= 0) PRODUCTS[existing] = obj; else PRODUCTS.unshift(obj); save(K_PRODUCTS, PRODUCTS); prodEditor.classList.add('hidden'); renderInventoryListUI(); renderProducts(getActiveCat()); }
+
+/* auth logic */
+authSubmit.addEventListener('click', ()=> {
+  const email = authEmail.value.trim(), pass = authPass.value;
+  const user = USERS.find(u=>u.email === email && u.password === pass);
+  if(!user){ alert('Invalid demo creds'); return; }
+  SESSION = { id:user.id, name:user.name, role:user.role, email:user.email };
+  save(K_SESSION, SESSION);
+  authModal.classList.add('hidden');
+  renderAuthBadge();
+  renderEmployees();
+});
+function signOut(){ SESSION=null; save(K_SESSION,null); renderAuthBadge(); }
+
+/* employees rendering */
+function renderEmployees(){ employeeSelect.innerHTML = ''; USERS.forEach(u=> { const o=document.createElement('option'); o.value=u.id; o.textContent = `${u.name} (${u.role})`; employeeSelect.appendChild(o); }); }
+
+/* helpers used earlier */
+function getActiveCat(){ return document.querySelector('.cat.active')?.dataset.cat || 'All Products' }
+
+/* generate PDF wrapper (reveal if debug) already have generatePDF */
+
+/* expose globals for debugging */
+window.__POS = { PRODUCTS, USERS, SALES, CART, SESSION };
+
+/* final save */
+save(K_PRODUCTS, PRODUCTS);
+save(K_USERS, USERS);
+save(K_SALES, SALES);
