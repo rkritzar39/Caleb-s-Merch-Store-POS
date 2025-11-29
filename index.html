@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Caleb's Merch Store — POS</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="app.js"></script>
+</head>
+
+<body>
+
+    <!-- ===== Top Bar ===== -->
+    <header class="top-bar glass">
+        <div class="logo">🛍️ Caleb’s Merch Store — POS</div>
+
+        <div class="top-actions">
+            <button id="searchBtn" class="icon-btn">🔍</button>
+            <button id="settingsBtn" class="icon-btn">⚙️</button>
+            <button id="logoutBtn" class="danger-btn">Logout</button>
+        </div>
+    </header>
+
+    <main class="layout">
+
+        <!-- ===== Sidebar Categories ===== -->
+        <aside class="sidebar glass">
+            <h2>Categories</h2>
+            <ul id="categoryList">
+                <li class="active">All Products</li>
+                <li>Outdoor</li>
+                <li>Hats</li>
+                <li>Hoodies & Sweatshirts</li>
+                <li>T-Shirts</li>
+                <li>Baby & Toddler</li>
+                <li>Kitchenwear</li>
+                <li>Accessories</li>
+            </ul>
+        </aside>
+
+        <!-- ===== Product Area ===== -->
+        <section class="product-area">
+            <div class="product-grid" id="productGrid">
+                <!-- products loaded by app.js -->
+            </div>
+        </section>
+
+        <!-- ===== Cart Panel ===== -->
+        <aside class="cart-panel glass">
+            <h2>Cart</h2>
+
+            <div id="cartItems" class="cart-items">
+                <!-- cart items added by JS -->
+            </div>
+
+            <div class="cart-summary">
+                <div class="row">
+                    <span>Subtotal:</span>
+                    <span id="cartSubtotal">$0.00</span>
+                </div>
+                <div class="row">
+                    <span>Tax (7%):</span>
+                    <span id="cartTax">$0.00</span>
+                </div>
+                <div class="row total">
+                    <span>Total:</span>
+                    <span id="cartTotal">$0.00</span>
+                </div>
+
+                <button id="checkoutBtn" class="checkout-btn">Checkout</button>
+            </div>
+        </aside>
+
+    </main>
+
+    <!-- ===== Checkout Modal ===== -->
+    <div id="checkoutModal" class="modal hidden">
+        <div class="modal-content glass">
+            <h2>Checkout</h2>
+
+            <div class="payment-options">
+                <button class="payment-btn">💵 Cash</button>
+                <button class="payment-btn">💳 Card</button>
+                <button class="payment-btn">📱 Apple Pay</button>
+            </div>
+
+            <button class="close-modal">Close</button>
+        </div>
+    </div>
+
+    <!-- ===== Settings Drawer ===== -->
+    <div id="settingsDrawer" class="drawer hidden glass">
+        <h2>Settings</h2>
+
+        <div class="setting">
+            <label>Dark Mode</label>
+            <input type="checkbox" id="darkModeToggle" />
+        </div>
+
+        <div class="setting">
+            <label>Sound Effects</label>
+            <input type="checkbox" checked />
+        </div>
+
+        <button class="close-settings">Close</button>
+    </div>
+
+</body>
+</html>
