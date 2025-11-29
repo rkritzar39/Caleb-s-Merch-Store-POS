@@ -1,0 +1,9 @@
+[
+  {"sku":"OUT-001","name":"Outdoor Backpack","price":49.99,"category":"Outdoor","stock":12,"img":"","desc":""},
+  {"sku":"HAT-001","name":"Caleb Hat","price":19.99,"category":"Hats","stock":30,"img":"","desc":""},
+  {"sku":"HD-001","name":"Logo Hoodie","price":39.99,"category":"Hoodies & Sweatshirts","stock":18,"img":"","desc":""},
+  {"sku":"TEE-001","name":"Graphic Tee","price":24.99,"category":"T-Shirts","stock":40,"img":"","desc":""},
+  {"sku":"BABY-001","name":"Baby Onesie","price":14.99,"category":"Baby & Toddler","stock":20,"img":"","desc":""},
+  {"sku":"MUG-001","name":"Caleb Mug","price":12.99,"category":"Kitchenwear","stock":25,"img":"","desc":""},
+  {"sku":"STK-001","name":"Sticker Pack","price":4.99,"category":"Accessories","stock":250,"img":"","desc":""}
+]
